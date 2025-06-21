@@ -1,94 +1,43 @@
-mod adapters;
-mod api;
-mod consent_manager;
-mod context_management;
-mod encryption;
-mod identity;
-mod policy_engine;
-mod storage;
-mod utils;
+use tiny_http::{Server, Response, Header};
+use serde::{Serialize, Deserialize};
+use std::str::FromStr;
 
-use actix_cors::Cors;
-use actix_web::{middleware, web, App, HttpServer};
-use dotenv::dotenv;
-use std::env;
-use tracing_actix_web::TracingLogger;
-use tracing_subscriber::{layer::SubscriberExt, util::SubscriberInitExt};
+#[derive(Serialize, Deserialize)]
+struct HealthResponse {
+    status: String,
+    version: String,
+}
 
-#[actix_web::main]
-async fn main() -> std::io::Result<()> {
-    // Load environment variables
-    dotenv().ok();
-    
-    // Initialize logging
-    tracing_subscriber::registry()
-        .with(tracing_subscriber::EnvFilter::new(
-            env::var("RUST_LOG").unwrap_or_else(|_| "info".into()),
-        ))
-        .with(tracing_subscriber::fmt::layer())
-        .init();
-    
-    // Initialize database connection pool (still needed for identity and consent)
-    let database_url = env::var("DATABASE_URL").expect("DATABASE_URL must be set");
-    let pool = sqlx::PgPool::connect(&database_url)
-        .await
-        .expect("Failed to connect to PostgreSQL");
-    
-    // Initialize the encryption service
-    let encryption_service = encryption::service::EncryptionService::new();
-    
-    // Initialize policy engine
-    let policy_engine = policy_engine::service::PolicyEngine::new();
-    
-    // Initialize context management service with mem0
-    let context_service = context_management::service::ContextService::new_with_mem0(
-        encryption_service.clone(),
-    );
-    
-    // Initialize consent manager
-    let consent_manager = consent_manager::service::ConsentManager::new(
-        pool.clone(),
-        policy_engine.clone(),
-    );
-    
-    // Initialize identity service
-    let identity_service = identity::service::IdentityService::new(pool.clone());
-    
-    // Application state
-    let app_state = web::Data::new(api::AppState {
-        pool,
-        context_service,
-        consent_manager,
-        encryption_service,
-        policy_engine,
-        identity_service,
-    });
-    
-    // Build GraphQL schema
-    let schema = api::schema::create_schema();
-    
-    // Start HTTP server
-    let bind_address = env::var("BIND_ADDRESS").unwrap_or_else(|_| "0.0.0.0:8000".to_string());
-    
-    tracing::info!("Starting server at {}", bind_address);
-    
-    HttpServer::new(move || {
-        let cors = Cors::default()
-            .allow_any_origin()
-            .allow_any_method()
-            .allow_any_header()
-            .max_age(3600);
+fn main() {
+    // Create a server listening on port 8000
+    let server = Server::http("0.0.0.0:8000").unwrap();
+    println!("Server running at http://0.0.0.0:8000/");
+
+    for request in server.incoming_requests() {
+        let url = request.url();
         
-        App::new()
-            .wrap(TracingLogger::default())
-            .wrap(middleware::Compress::default())
-            .wrap(middleware::NormalizePath::trim())
-            .wrap(cors)
-            .app_data(app_state.clone())
-            .app_data(web::Data::new(schema.clone()))
-            .configure(api::configure)
-    })
-    .bind(bind_address)?
-    .run()
-    .await
+        match url {
+            "/" => {
+                let response = Response::from_string("Open Context Vault API")
+                    .with_header(Header::from_str("Content-Type: text/plain").unwrap());
+                request.respond(response).unwrap();
+            },
+            "/api/health" => {
+                let health = HealthResponse {
+                    status: "ok".to_string(),
+                    version: env!("CARGO_PKG_VERSION").to_string(),
+                };
+                
+                let json = serde_json::to_string(&health).unwrap();
+                let response = Response::from_string(json)
+                    .with_header(Header::from_str("Content-Type: application/json").unwrap());
+                request.respond(response).unwrap();
+            },
+            _ => {
+                let response = Response::from_string("Not Found")
+                    .with_status_code(404);
+                request.respond(response).unwrap();
+            }
+        }
+    }
 }

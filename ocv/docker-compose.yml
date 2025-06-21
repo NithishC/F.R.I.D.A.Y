@@ -8,7 +8,7 @@ services:
       POSTGRES_PASSWORD: ocv_password
       POSTGRES_DB: ocv_dev
     ports:
-      - "5432:5432"
+      - "0.0.0.0:5432:5432"
     volumes:
       - postgres_data:/var/lib/postgresql/data
     healthcheck:
@@ -22,7 +22,7 @@ services:
       context: ./backend
       dockerfile: Dockerfile.dev
     ports:
-      - "8000:8000"
+      - "0.0.0.0:8000:8000"
     volumes:
       - ./backend:/app
     depends_on:
@@ -38,20 +38,9 @@ services:
       context: ./frontend
       dockerfile: Dockerfile.dev
     ports:
-      - "3000:3000"
+      - "0.0.0.0:3000:3000"
     volumes:
       - ./frontend:/app
-    depends_on:
-      - backend
-
-  travel-demo:
-    build:
-      context: ./travel-demo
-      dockerfile: Dockerfile.dev
-    ports:
-      - "3001:3000"
-    volumes:
-      - ./travel-demo:/app
     depends_on:
       - backend
 

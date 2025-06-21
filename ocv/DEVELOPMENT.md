@@ -53,25 +53,6 @@ The GraphQL API will be available at http://localhost:8000/graphql
 
 The consent management UI will be available at http://localhost:3000
 
-## Travel Demo Setup
-
-1. Navigate to the travel-demo directory:
-   ```bash
-   cd travel-demo
-   ```
-
-2. Install dependencies:
-   ```bash
-   npm install
-   ```
-
-3. Start the development server:
-   ```bash
-   npm run dev
-   ```
-
-The travel demo will be available at http://localhost:3001
-
 ## Running Tests
 
 ```bash

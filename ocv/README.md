@@ -22,7 +22,6 @@ OCV is a secure, privacy-focused service that allows users to:
 - `/backend`: Rust-based core services
 - `/frontend`: Consent management UI components
 - `/sdks`: Client libraries for integration
-- `/travel-demo`: Example zero-UI travel application
 
 ## Getting Started
 
