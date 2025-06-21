@@ -8,24 +8,107 @@ const conversation = document.getElementById('conversation');
 const audioVisualizer = document.getElementById('audioVisualizer');
 const visualizerCanvas = audioVisualizer.getContext('2d');
 const resetButton = document.getElementById('resetButton');
+const testButton = document.getElementById('testButton');
 
-// Audio recording variables
-let mediaRecorder;
-let audioChunks = [];
+// Speech recognition setup
+let recognition;
 let isRecording = false;
-let audioContext;
-let analyser;
-let dataArray;
-let animationId;
+let finalTranscript = '';
+let interimTranscript = '';
 
-// Initialize audio context
-function initAudioContext() {
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    analyser = audioContext.createAnalyser();
-    analyser.fftSize = 256;
-    const bufferLength = analyser.frequencyBinCount;
-    dataArray = new Uint8Array(bufferLength);
+// Initialize Web Speech API
+function initSpeechRecognition() {
+    if (!('webkitSpeechRecognition' in window) && !('SpeechRecognition' in window)) {
+        updateStatus('Speech recognition not supported', 'error');
+        micButton.disabled = true;
+        return false;
+    }
+    
+    const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
+    recognition = new SpeechRecognition();
+    
+    // Configure recognition
+    recognition.continuous = true;
+    recognition.interimResults = true;
+    recognition.lang = 'en-US';
+    recognition.maxAlternatives = 1;
+    
+    // Recognition event handlers
+    recognition.onstart = () => {
+        console.log('Speech recognition started');
+        updateStatus('Listening...', 'active');
+        finalTranscript = '';
+        interimTranscript = '';
+    };
+    
+    recognition.onresult = (event) => {
+        interimTranscript = '';
+        
+        for (let i = event.resultIndex; i < event.results.length; i++) {
+            const transcript = event.results[i][0].transcript;
+            
+            if (event.results[i].isFinal) {
+                finalTranscript += transcript + ' ';
+            } else {
+                interimTranscript += transcript;
+            }
+        }
+        
+        // Show real-time transcription
+        const currentText = finalTranscript + interimTranscript;
+        if (currentText.trim()) {
+            updateStatus(`"${currentText.trim()}"`, 'active');
+        }
+    };
+    
+    recognition.onerror = (event) => {
+        console.error('Speech recognition error:', event.error);
+        let errorMessage = 'Speech recognition error';
+        
+        switch(event.error) {
+            case 'network':
+                errorMessage = 'Network error - please check your connection';
+                break;
+            case 'not-allowed':
+                errorMessage = 'Microphone access denied';
+                break;
+            case 'no-speech':
+                errorMessage = 'No speech detected';
+                break;
+            case 'audio-capture':
+                errorMessage = 'No microphone found';
+                break;
+        }
+        
+        updateStatus(errorMessage, 'error');
+        setTimeout(() => updateStatus('Ready'), 3000);
+        isRecording = false;
+        micButton.classList.remove('recording');
+        micButton.querySelector('.mic-text').textContent = 'Hold to Talk';
+    };
+    
+    recognition.onend = () => {
+        console.log('Speech recognition ended');
+        if (isRecording) {
+            // Restart if still holding button
+            recognition.start();
+        } else {
+            // Process final transcript
+            const fullTranscript = (finalTranscript + interimTranscript).trim();
+            if (fullTranscript) {
+                sendTextToServer(fullTranscript);
+            } else {
+                updateStatus('No speech detected', 'error');
+                setTimeout(() => updateStatus('Ready'), 2000);
+            }
+        }
+    };
+    
+    return true;
 }
+
+// Initialize speech recognition on load
+const speechRecognitionAvailable = initSpeechRecognition();
 
 // Socket.IO event listeners
 socket.on('connect', () => {
@@ -38,13 +121,15 @@ socket.on('disconnect', () => {
     updateStatus('Disconnected', 'error');
 });
 
-socket.on('transcription', (data) => {
-    addMessage('user', data.text);
-});
-
 socket.on('response', (data) => {
     addMessage('assistant', data.text);
-    playAudioResponse(data.audio);
+    if (data.audio) {
+        playAudioResponse(data.audio);
+    }
+    // Show emotion indicator if provided
+    if (data.emotion) {
+        console.log('Response emotion:', data.emotion);
+    }
 });
 
 socket.on('error', (data) => {
@@ -61,89 +146,74 @@ micButton.addEventListener('touchend', stopRecording);
 // Prevent context menu on long press
 micButton.addEventListener('contextmenu', (e) => e.preventDefault());
 
-async function startRecording() {
-    if (isRecording) return;
+function startRecording() {
+    if (!speechRecognitionAvailable || isRecording) return;
     
     try {
-        const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
-        
-        if (!audioContext) {
-            initAudioContext();
-        }
-        
-        // Connect to analyser for visualization
-        const source = audioContext.createMediaStreamSource(stream);
-        source.connect(analyser);
-        
-        // Start visualization
-        document.querySelector('.visualizer').classList.add('active');
-        visualize();
-        
-        // Set up MediaRecorder
-        mediaRecorder = new MediaRecorder(stream);
-        audioChunks = [];
-        
-        mediaRecorder.ondataavailable = (event) => {
-            audioChunks.push(event.data);
-        };
-        
-        mediaRecorder.onstop = async () => {
-            const audioBlob = new Blob(audioChunks, { type: 'audio/webm' });
-            sendAudioToServer(audioBlob);
-            
-            // Stop visualization
-            cancelAnimationFrame(animationId);
-            document.querySelector('.visualizer').classList.remove('active');
-            
-            // Stop all tracks
-            stream.getTracks().forEach(track => track.stop());
-        };
-        
-        mediaRecorder.start();
         isRecording = true;
+        recognition.start();
         
         // Update UI
         micButton.classList.add('recording');
-        micButton.querySelector('.mic-text').textContent = 'Recording...';
-        updateStatus('Listening...', 'active');
+        micButton.querySelector('.mic-text').textContent = 'Listening...';
+        
+        // Visual feedback
+        document.querySelector('.visualizer').classList.add('active');
+        animateVisualizer();
         
     } catch (error) {
-        console.error('Error accessing microphone:', error);
-        updateStatus('Microphone access denied', 'error');
+        console.error('Error starting recognition:', error);
+        updateStatus('Failed to start recording', 'error');
+        isRecording = false;
         setTimeout(() => updateStatus('Ready'), 3000);
     }
 }
 
 function stopRecording() {
-    if (!isRecording || !mediaRecorder) return;
+    if (!isRecording) return;
     
-    mediaRecorder.stop();
     isRecording = false;
+    recognition.stop();
     
     // Update UI
     micButton.classList.remove('recording');
     micButton.querySelector('.mic-text').textContent = 'Hold to Talk';
     updateStatus('Processing...');
+    
+    // Stop visualizer
+    document.querySelector('.visualizer').classList.remove('active');
 }
 
-function sendAudioToServer(audioBlob) {
-    const reader = new FileReader();
-    reader.onload = () => {
-        const base64Audio = reader.result.split(',')[1];
-        socket.emit('audio_data', { audio: base64Audio });
-    };
-    reader.readAsDataURL(audioBlob);
+function sendTextToServer(text) {
+    console.log('Sending text to server:', text);
+    
+    // Add user message to conversation
+    addMessage('user', text);
+    
+    // Send text via Socket.IO
+    socket.emit('text_message', { text: text });
+    
+    updateStatus('Thinking...');
 }
 
 function playAudioResponse(base64Audio) {
-    const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
-    audio.play().catch(error => {
-        console.error('Error playing audio:', error);
-    });
-    
-    audio.onended = () => {
+    try {
+        // Edge-TTS returns MP3 format
+        const audio = new Audio(`data:audio/mp3;base64,${base64Audio}`);
+        audio.play().catch(error => {
+            console.error('Error playing audio:', error);
+            // Fallback: try as wav
+            const audioWav = new Audio(`data:audio/wav;base64,${base64Audio}`);
+            audioWav.play().catch(e => console.error('Audio playback failed:', e));
+        });
+        
+        audio.onended = () => {
+            updateStatus('Ready');
+        };
+    } catch (error) {
+        console.error('Audio playback error:', error);
         updateStatus('Ready');
-    };
+    }
 }
 
 function addMessage(sender, text) {
@@ -152,7 +222,20 @@ function addMessage(sender, text) {
     
     const contentDiv = document.createElement('div');
     contentDiv.classList.add('message-content');
-    contentDiv.textContent = text;
+    
+    // Process markdown for display (basic support)
+    let displayText = text;
+    // Convert bold markdown to HTML
+    displayText = displayText.replace(/\*\*(.+?)\*\*/g, '<strong>$1</strong>');
+    // Convert italic markdown to HTML
+    displayText = displayText.replace(/\*(.+?)\*/g, '<em>$1</em>');
+    
+    // Use innerHTML for formatted text, but escape other HTML first
+    displayText = displayText.replace(/</g, '&lt;').replace(/>/g, '&gt;');
+    displayText = displayText.replace(/&lt;strong&gt;/g, '<strong>').replace(/&lt;\/strong&gt;/g, '</strong>');
+    displayText = displayText.replace(/&lt;em&gt;/g, '<em>').replace(/&lt;\/em&gt;/g, '</em>');
+    
+    contentDiv.innerHTML = displayText;
     
     messageDiv.appendChild(contentDiv);
     conversation.appendChild(messageDiv);
@@ -169,33 +252,33 @@ function updateStatus(message, className = '') {
     }
 }
 
-function visualize() {
+// Simple visualizer animation
+let animationId;
+function animateVisualizer() {
     const WIDTH = audioVisualizer.width;
     const HEIGHT = audioVisualizer.height;
-    
-    analyser.getByteFrequencyData(dataArray);
     
     visualizerCanvas.fillStyle = 'rgba(0, 0, 0, 0.2)';
     visualizerCanvas.fillRect(0, 0, WIDTH, HEIGHT);
     
-    const barWidth = (WIDTH / dataArray.length) * 2.5;
-    let barHeight;
-    let x = 0;
+    // Create random bars for visual effect
+    const barCount = 20;
+    const barWidth = WIDTH / barCount;
     
-    for (let i = 0; i < dataArray.length; i++) {
-        barHeight = (dataArray[i] / 255) * HEIGHT;
+    for (let i = 0; i < barCount; i++) {
+        const barHeight = Math.random() * HEIGHT * 0.7 + HEIGHT * 0.1;
         
-        const r = 250 * (i / dataArray.length);
+        const r = 250 * (i / barCount);
         const g = 50;
         const b = 250;
         
         visualizerCanvas.fillStyle = `rgb(${r},${g},${b})`;
-        visualizerCanvas.fillRect(x, HEIGHT - barHeight, barWidth, barHeight);
-        
-        x += barWidth + 1;
+        visualizerCanvas.fillRect(i * barWidth, HEIGHT - barHeight, barWidth - 2, barHeight);
     }
     
-    animationId = requestAnimationFrame(visualize);
+    if (isRecording) {
+        animationId = requestAnimationFrame(animateVisualizer);
+    }
 }
 
 // Reset button handler
@@ -227,8 +310,16 @@ resetButton.addEventListener('click', async () => {
     }
 });
 
+// Test button handler
+testButton.addEventListener('click', async () => {
+    updateStatus('Testing system...', 'active');
+    
+    const testText = "Hello FRIDAY, how are you today?";
+    sendTextToServer(testText);
+});
+
 // Check for browser compatibility
-if (!navigator.mediaDevices || !navigator.mediaDevices.getUserMedia) {
-    updateStatus('Browser not supported', 'error');
+if (!speechRecognitionAvailable) {
+    status.innerHTML = 'Speech recognition not supported. Please use Chrome, Edge, or Safari.';
     micButton.disabled = true;
 }

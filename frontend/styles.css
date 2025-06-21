@@ -92,6 +92,16 @@ body {
     border-bottom-left-radius: 4px;
 }
 
+.message-content strong {
+    font-weight: 600;
+    color: #ffffff;
+}
+
+.message-content em {
+    font-style: italic;
+    opacity: 0.9;
+}
+
 .controls {
     display: flex;
     flex-direction: column;
@@ -192,6 +202,33 @@ body {
 }
 
 .reset-button svg {
+    width: 20px;
+    height: 20px;
+}
+
+.test-button {
+    position: absolute;
+    left: -40px;
+    top: 35px;
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.1);
+    border: 1px solid rgba(255, 255, 255, 0.2);
+    color: rgba(255, 255, 255, 0.6);
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: all 0.3s ease;
+}
+
+.test-button:hover {
+    background: rgba(76, 175, 80, 0.2);
+    color: rgba(76, 175, 80, 0.9);
+}
+
+.test-button svg {
     width: 20px;
     height: 20px;
 }
