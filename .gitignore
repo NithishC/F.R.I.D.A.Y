@@ -1,0 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+friday_env/
+venv/
+ENV/
+env/
+
+# Environment variables
+.env
+.env.local
+.env.*.local
+
+# IDE
+.vscode/
+.idea/
+*.sublime-project
+*.sublime-workspace
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Logs
+*.log
+logs/
+
+# FFmpeg binaries
+backend/ffmpeg/bin/*.exe
+
+# Temporary files
+*.tmp
+*.temp
+temp/
+tmp/
+
+# Audio files (if you want to exclude test recordings)
+*.mp3
+*.wav
+*.webm
