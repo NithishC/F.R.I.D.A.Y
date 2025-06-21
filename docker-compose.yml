@@ -1,0 +1,47 @@
+services:
+  # Original F.R.I.D.A.Y services
+  friday-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=development
+
+  friday-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/app/src
+    depends_on:
+      - friday-backend
+
+  # OCV implementation
+  backend:
+    build:
+      context: ./ocv/backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ocv/backend:/app
+    environment:
+      BASIC_MEM0_API_KEY: ${BASIC_MEM0_API_KEY:-your_api_key_here}
+
+  consent-ui:
+    build:
+      context: ./ocv/frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:80"
+    volumes:
+      - ./ocv/frontend/public:/usr/share/nginx/html
+    depends_on:
+      - backend
