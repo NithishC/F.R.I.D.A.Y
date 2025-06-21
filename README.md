@@ -1,160 +1,121 @@
-# F.R.I.D.A.Y - Voice-Powered AI Assistant
+# F.R.I.D.A.Y with Open Context Vault + Basic's mem0
 
-A real-time voice conversation web application that allows users to have natural conversations with an AI assistant, powered by Google's Gemini AI.
-
-## Features
-
-- **Voice Input**: Press and hold to record your voice
-- **Speech-to-Text**: Converts your speech to text using Google Speech Recognition
-- **AI Responses**: Powered by Google's Gemini Pro (free tier)
-- **Text-to-Speech**: Converts AI responses back to speech
-- **Real-time Communication**: Uses WebSockets for instant communication
-- **Audio Visualization**: See your voice input visualized in real-time
-- **Conversation Reset**: Clear conversation history with one click
-- **Modern UI**: Glassmorphism design with smooth animations
-
-## Technology Stack
-
-- **Backend**: Flask + Socket.IO
-- **Frontend**: Vanilla JavaScript with Socket.IO client
-- **Speech Recognition**: Google Speech Recognition API
-- **Language Model**: Google Gemini Pro (free API)
-- **Text-to-Speech**: gTTS (Google Text-to-Speech)
-
-## Prerequisites
-
-- Python 3.8 or higher
-- Google Gemini API key (free)
-
-## Setup Instructions
-
-### 1. Get Gemini API Key (Free)
-
-1. Go to https://makersuite.google.com/app/apikey
-2. Sign in with your Google account
-3. Click "Create API Key"
-4. Copy the API key
-
-### 2. Configure the Application
-
-1. Open the `.env` file in the project root
-2. Replace `your_gemini_api_key_here` with your actual Gemini API key
-
-### 3. Activate Virtual Environment
-
-```bash
-# Navigate to project directory
-cd C:\Users\navee\Projects\Hackathon\F.R.I.D.A.Y
-
-# Activate virtual environment
-friday_env\Scripts\activate
-```
-
-### 4. Install Dependencies (if needed)
-
-```bash
-pip install -r requirements.txt
-```
-
-### 5. Run the Backend Server
-
-```bash
-# Navigate to backend directory
-cd backend
-
-# Run the Flask application
-python app.py
-```
-
-You should see:
-```
-Starting FRIDAY backend...
-Gemini API configured: Yes
- * Running on http://127.0.0.1:5000
-```
-
-### 6. Serve the Frontend
-
-Open a new terminal/command prompt:
-
-```bash
-# Navigate to frontend directory
-cd C:\Users\navee\Projects\Hackathon\F.R.I.D.A.Y\frontend
-
-# Start a simple HTTP server
-python -m http.server 8000
-```
-
-### 7. Access the Application
-
-Open your web browser and go to: http://localhost:8000
-
-## Usage
-
-1. **Allow microphone access** when prompted by your browser
-2. **Press and hold** the microphone button to start recording
-3. **Speak your message** clearly
-4. **Release the button** to send your message
-5. **Wait for the AI response** - it will be displayed as text and played as audio
-6. **Reset conversation** using the reset button if needed
+This project combines the F.R.I.D.A.Y assistant with Open Context Vault (OCV), a secure, privacy-focused personal data layer for AI context sharing. It uses Basic.tech's mem0 as the underlying memory layer for storing and retrieving context data.
 
 ## Project Structure
 
-```
-F.R.I.D.A.Y/
-├── backend/
-│   └── app.py              # Flask backend with Socket.IO
-├── frontend/
-│   ├── index.html          # Main UI
-│   ├── styles.css          # Glassmorphism styling
-│   └── script.js           # Client-side logic
-├── friday_env/             # Python virtual environment
-├── requirements.txt        # Python dependencies
-├── .env                   # API key configuration
-├── .gitignore             # Git ignore file
-└── README.md              # This file
-```
+- `/backend` - Original F.R.I.D.A.Y backend (Flask)
+- `/frontend` - Original F.R.I.D.A.Y frontend
+- `/ocv` - Open Context Vault implementation
+  - `/backend` - Rust-based OCV backend with mem0 integration
+  - `/frontend` - Consent management UI
+  - `/sdks` - Client libraries for OCV
+  - `/travel-demo` - Example zero-UI travel application
 
-## Troubleshooting
+## Getting Started
 
-### Common Issues
+### Prerequisites
 
-1. **"Microphone access denied"**:
-   - Check your browser settings and allow microphone access for localhost
-   - Make sure no other application is using the microphone
+- [Docker](https://docs.docker.com/get-docker/) and [Docker Compose](https://docs.docker.com/compose/install/)
+- [Rust](https://www.rust-lang.org/tools/install) (stable channel, 1.75+)
+- [Node.js](https://nodejs.org/) (v18+)
+- Basic.tech mem0 API key
 
-2. **"Could not understand the audio"**:
-   - Speak clearly and ensure there's minimal background noise
-   - Try speaking closer to the microphone
+### Basic.tech mem0 Configuration
 
-3. **No AI response**:
-   - Verify your Gemini API key is correctly set in the `.env` file
-   - Check the backend console for any error messages
-   - Ensure you have internet connectivity
+1. Obtain an API key from Basic.tech for their mem0 service
+2. Create a `.env` file in the root directory with the following content:
+   ```
+   BASIC_MEM0_API_KEY=your_api_key_here
+   ```
 
-4. **Connection issues**:
-   - Ensure both backend (port 5000) and frontend (port 8000) servers are running
-   - Check that no other applications are using these ports
+### Running the Project
 
-## API Information
+1. Clone the repository:
+   ```bash
+   git clone <repository-url>
+   cd F.R.I.D.A.Y
+   ```
 
-### Gemini API (Free Tier)
-- **Rate Limits**: 60 requests per minute
-- **Token Limits**: Generous limits for conversational use
-- **Cost**: Free
-- **Documentation**: https://ai.google.dev/
+2. Start the services:
+   ```bash
+   docker-compose up
+   ```
 
-## Security Notes
+This will start all the necessary services:
+- F.R.I.D.A.Y backend on port 5000
+- F.R.I.D.A.Y frontend on port 8080
+- OCV backend on port 8000
+- OCV consent UI on port 3000
+- Travel demo on port 3001
+- PostgreSQL database on port 5432
 
-- Never commit your `.env` file with API keys to version control
-- The `.gitignore` file is already configured to exclude sensitive files
-- Keep your API keys secure and rotate them periodically
+## Accessing Services from Another Laptop
 
-## Future Enhancements
+To access the services from another laptop on your home network:
 
-- Add support for multiple languages
-- Implement streaming responses
-- Add conversation history storage
-- Support for voice customization
-- Implement wake word detection ("Hey FRIDAY")
-- Add user authentication and profiles
+1. Find the IP address of the host laptop:
+   ```bash
+   # On Windows
+   ipconfig
+   
+   # On macOS/Linux
+   ifconfig
+   # or
+   ip addr
+   ```
+
+2. On the client laptop, access the services using the host laptop's IP address:
+   - OCV Consent UI: `http://<host-ip>:3000`
+   - Travel Demo: `http://<host-ip>:3001`
+   - F.R.I.D.A.Y Frontend: `http://<host-ip>:8080`
+
+## OCV Development
+
+For development of the Open Context Vault components, please refer to the detailed documentation in `/ocv/DEVELOPMENT.md`.
+
+## mem0 Integration
+
+OCV integrates with Basic.tech's mem0 service for storing and retrieving context data. The integration is implemented in the following components:
+
+- `adapters/mem0.rs` - Adapter for mem0 API
+- `context_management/repository.rs` - Repository using the mem0 adapter
+- `context_management/service.rs` - Service exposing mem0 functionality
+
+### How it Works
+
+1. User data is encrypted using OCV's encryption service
+2. Encrypted data is stored in mem0 through the adapter
+3. OCV's consent management controls access to the data
+4. Applications interact with the data through OCV's GraphQL API
+
+## Travel Demo
+
+The travel demo showcases how applications can integrate with OCV to provide personalized experiences while respecting user privacy. Key features:
+
+- Zero-UI sign-up experience
+- Personalized travel recommendations
+- User-controlled context sharing
+- Persistent preferences across devices
+
+To use the travel demo:
+1. Navigate to http://localhost:3001
+2. Click "Connect to OCV" to grant access to your context data
+3. Set your travel preferences
+4. Explore personalized destination recommendations
+
+## Architecture
+
+Open Context Vault follows a modular architecture:
+
+- **Context Management Service**: Stores and retrieves encrypted context shards using mem0
+- **Consent Manager**: Handles access grants and permissions
+- **Policy Engine**: Enforces access control rules
+- **Encryption Service**: Handles end-to-end encryption
+- **GraphQL API**: Unified API for applications
+
+For more details, see the architecture documentation in `/ocv/README.md`.
+
+## License
+
+This project is licensed under the MIT License - see the LICENSE file for details.

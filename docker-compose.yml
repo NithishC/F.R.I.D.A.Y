@@ -1,0 +1,97 @@
+version: '3.8'
+
+services:
+  # Backend services
+  db:
+    image: postgres:14-alpine
+    environment:
+      POSTGRES_USER: ocv
+      POSTGRES_PASSWORD: ocv_password
+      POSTGRES_DB: ocv_dev
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres_data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ocv"]
+      interval: 5s
+      timeout: 5s
+      retries: 5
+
+  backend:
+    build:
+      context: ./ocv/backend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "8000:8000"
+    volumes:
+      - ./ocv/backend:/app
+    depends_on:
+      db:
+        condition: service_healthy
+    environment:
+      DATABASE_URL: postgres://ocv:ocv_password@db:5432/ocv_dev
+      RUST_LOG: debug
+      BIND_ADDRESS: 0.0.0.0:8000
+      BASIC_MEM0_API_KEY: ${BASIC_MEM0_API_KEY:-your_api_key_here}
+
+  # Frontend services
+  consent-ui:
+    build:
+      context: ./ocv/frontend
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3000:3000"
+    volumes:
+      - ./ocv/frontend:/app
+      - node_modules_consent:/app/node_modules
+    depends_on:
+      - backend
+    environment:
+      REACT_APP_API_URL: http://localhost:8000/api/graphql
+      REACT_APP_SERVER_URL: http://localhost:8000
+
+  travel-demo:
+    build:
+      context: ./ocv/travel-demo
+      dockerfile: Dockerfile.dev
+    ports:
+      - "3001:3000"
+    volumes:
+      - ./ocv/travel-demo:/app
+      - node_modules_travel:/app/node_modules
+    depends_on:
+      - backend
+      - consent-ui
+    environment:
+      REACT_APP_OCV_API_URL: http://localhost:8000/api/graphql
+      REACT_APP_CONSENT_URL: http://localhost:3000
+
+  # Original F.R.I.D.A.Y services (if needed)
+  friday-backend:
+    build:
+      context: ./backend
+      dockerfile: Dockerfile
+    ports:
+      - "5000:5000"
+    volumes:
+      - ./backend:/app
+      - ./logs:/app/logs
+    environment:
+      - FLASK_ENV=development
+
+  friday-frontend:
+    build:
+      context: ./frontend
+      dockerfile: Dockerfile
+    ports:
+      - "8080:80"
+    volumes:
+      - ./frontend:/app/src
+    depends_on:
+      - friday-backend
+
+volumes:
+  postgres_data:
+  node_modules_consent:
+  node_modules_travel:
