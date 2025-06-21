@@ -3,50 +3,75 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>F.R.I.D.A.Y - Voice Assistant</title>
+    <title>F.R.I.D.A.Y - AI Voice Assistant</title>
     <link rel="stylesheet" href="styles.css">
     <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
 </head>
 <body>
-    <div class="container">
-        <div class="header">
-            <h1>F.R.I.D.A.Y</h1>
-            <p class="subtitle">Your AI Voice Assistant</p>
+    <div class="app-container">
+        <!-- Animated background -->
+        <div class="animated-bg">
+            <div class="gradient-orb orb-1"></div>
+            <div class="gradient-orb orb-2"></div>
+            <div class="gradient-orb orb-3"></div>
         </div>
         
-        <div class="chat-container">
-            <div id="conversation" class="conversation">
-                <div class="message assistant">
-                    <div class="message-content">
-                        Hello! I'm FRIDAY, your AI assistant. Press and hold the microphone button to talk to me.
+        <!-- Main content -->
+        <div class="main-content">
+            <!-- Header -->
+            <header class="app-header">
+                <div class="logo-container">
+                    <div class="logo-icon">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 2L2 7L12 12L22 7L12 2Z"></path>
+                            <path d="M2 17L12 22L22 17"></path>
+                            <path d="M2 12L12 17L22 12"></path>
+                        </svg>
+                    </div>
+                    <h1 class="app-title">F.R.I.D.A.Y</h1>
+                </div>
+                <button id="resetButton" class="icon-button" title="Reset Conversation">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M1 4v6h6"></path>
+                        <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
+                    </svg>
+                </button>
+            </header>
+            
+            <!-- Chat interface -->
+            <div class="chat-interface">
+                <div id="conversation" class="conversation-container">
+                    <div class="welcome-message">
+                        <div class="assistant-avatar">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                                <circle cx="12" cy="12" r="10"></circle>
+                                <path d="M12 6v6l4 2"></path>
+                            </svg>
+                        </div>
+                        <div class="message-bubble assistant">
+                            <p>Hello! I'm F.R.I.D.A.Y, your AI assistant. Say <span class="highlight">"Hello Friday"</span> to wake me up!</p>
+                        </div>
                     </div>
                 </div>
             </div>
-        </div>
-        
-        <div class="controls">
-            <button id="micButton" class="mic-button">
-                <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                    <line x1="12" y1="19" x2="12" y2="23"></line>
-                    <line x1="8" y1="23" x2="16" y2="23"></line>
-                </svg>
-                <span class="mic-text">Hold to Talk</span>
-            </button>
             
-            <div class="status" id="status">Ready</div>
-            
-            <button id="resetButton" class="reset-button" title="Reset Conversation">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M1 4v6h6"></path>
-                    <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                </svg>
-            </button>
-        </div>
-        
-        <div class="visualizer">
-            <canvas id="audioVisualizer" width="300" height="100"></canvas>
+            <!-- Voice control center -->
+            <div class="voice-control-center">
+                <div class="voice-visualizer" id="wakeIndicator">
+                    <canvas id="audioVisualizer" width="400" height="120"></canvas>
+                    <div class="voice-orb">
+                        <div class="orb-core"></div>
+                        <div class="orb-ring ring-1"></div>
+                        <div class="orb-ring ring-2"></div>
+                        <div class="orb-ring ring-3"></div>
+                    </div>
+                </div>
+                
+                <div class="status-container">
+                    <div id="status" class="status-text">Initializing...</div>
+                    <div class="status-indicator"></div>
+                </div>
+            </div>
         </div>
     </div>
     
