@@ -1,3 +1,99 @@
+// Play a silent sound to initialize audio context
+function playSilentSound() {
+    if (audioContext && audioContext.state !== 'suspended') return;
+    
+    try {
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+        }
+        
+        // Create a silent buffer
+        const buffer = audioContext.createBuffer(1, 1, 22050);
+        const source = audioContext.createBufferSource();
+        source.buffer = buffer;
+        source.connect(audioContext.destination);
+        source.start();
+        
+        console.log('Silent sound played to initialize audio context');
+    } catch (e) {
+        console.log('Could not play silent sound:', e);
+    }
+}
+
+// Try to play silent sound on various user interactions
+document.addEventListener('visibilitychange', () => {
+    if (!document.hidden && hasUserInteracted) {
+        playSilentSound();
+    }
+});
+
+// Also try on first mouse move
+document.addEventListener('mousemove', playSilentSound, { once: true });
+
+// Add some visual feedback for better UX
+function showInteractionPrompt() {
+    // Don't show if already shown
+    if (document.getElementById('interactionPrompt')) return;
+    
+    const promptDiv = document.createElement('div');
+    promptDiv.id = 'interactionPrompt';
+    promptDiv.style.cssText = `
+        position: fixed;
+        bottom: 100px;
+        left: 50%;
+        transform: translateX(-50%);
+        background: rgba(0, 212, 255, 0.1);
+        backdrop-filter: blur(10px);
+        border: 1px solid rgba(0, 212, 255, 0.3);
+        color: var(--primary-color);
+        padding: 16px 32px;
+        border-radius: 50px;
+        font-size: 14px;
+        z-index: 1000;
+        animation: pulseGlow 2s infinite ease-in-out;
+        cursor: pointer;
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        box-shadow: 0 8px 32px -4px rgba(0, 212, 255, 0.3);
+    `;
+    
+    // Add pulse animation
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes pulseGlow {
+            0%, 100% {
+                transform: translateX(-50%) scale(1);
+                box-shadow: 0 8px 32px -4px rgba(0, 212, 255, 0.3);
+            }
+            50% {
+                transform: translateX(-50%) scale(1.05);
+                box-shadow: 0 8px 40px -4px rgba(0, 212, 255, 0.5);
+            }
+        }
+    `;
+    document.head.appendChild(style);
+    
+    promptDiv.innerHTML = `
+        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
+            <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
+            <line x1="12" y1="19" x2="12" y2="23"></line>
+            <line x1="8" y1="23" x2="16" y2="23"></line>
+        </svg>
+        <span>Tap to enable voice responses</span>
+    `;
+    
+    promptDiv.onclick = () => {
+        initializeAudioContext();
+        promptDiv.style.opacity = '0';
+        promptDiv.style.transform = 'translateX(-50%) scale(0.9)';
+        setTimeout(() => promptDiv.remove(), 300);
+    };
+    
+    document.body.appendChild(promptDiv);
+}
+
 // Initialize Socket.IO connection
 const socket = io('http://localhost:5000');
 
@@ -7,7 +103,6 @@ const conversation = document.getElementById('conversation');
 const audioVisualizer = document.getElementById('audioVisualizer');
 const visualizerCanvas = audioVisualizer.getContext('2d');
 const resetButton = document.getElementById('resetButton');
-const wakeIndicator = document.getElementById('wakeIndicator');
 
 // Speech recognition setup
 let recognition;
@@ -16,8 +111,41 @@ let isProcessing = false;
 let silenceTimer;
 let finalTranscript = '';
 let isWakeWordActive = false;
-let hasUserInteracted = false;
-let audioContext = null;
+// Initialize immediately on page load
+let hasUserInteracted = false; // Set back to false to handle audio context properly
+let audioContext = null; // Initialize as null
+
+// Initialize audio context on first user interaction
+function initializeAudioContext() {
+    if (!hasUserInteracted) {
+        hasUserInteracted = true;
+        
+        // Create audio context
+        if (!audioContext) {
+            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            console.log('Audio context initialized');
+        }
+        
+        // Start listening if not already
+        if (!isListening) {
+            updateStatus('Say "Hello Friday" to activate', 'active');
+            startListening();
+        }
+        
+        // Play pending audio if any
+        if (window.pendingAudio) {
+            const { audio, isGoodbye } = window.pendingAudio;
+            window.shouldDeactivateAfterAudio = isGoodbye;
+            playAudioResponse(audio);
+            window.pendingAudio = null;
+        }
+    }
+}
+
+// Add event listeners for user interaction
+document.addEventListener('click', initializeAudioContext, { once: true });
+document.addEventListener('keydown', initializeAudioContext, { once: true });
+document.addEventListener('touchstart', initializeAudioContext, { once: true });
 
 // Initialize Web Speech API
 function initSpeechRecognition() {
@@ -38,6 +166,12 @@ function initSpeechRecognition() {
     // Recognition event handlers
     recognition.onstart = () => {
         console.log('Speech recognition started');
+        
+        // Initialize audio context if not already done
+        if (!hasUserInteracted) {
+            initializeAudioContext();
+        }
+        
         if (!isWakeWordActive && hasUserInteracted) {
             updateStatus('Say "Hello Friday" to activate', 'active');
         }
@@ -156,13 +290,10 @@ const speechRecognitionAvailable = initSpeechRecognition();
 // Socket.IO event listeners
 socket.on('connect', () => {
     console.log('Connected to server');
-    if (!hasUserInteracted) {
-        updateStatus('Click anywhere to start FRIDAY', 'active');
-        showStartPrompt();
-    } else {
-        updateStatus('Connected - Say "Hello Friday" to start', 'active');
-        startListening();
-    }
+    
+    // Always try to start listening
+    updateStatus('Say "Hello Friday" to activate', 'active');
+    startListening();
 });
 
 socket.on('disconnect', () => {
@@ -185,6 +316,17 @@ socket.on('response', async (data) => {
     if (data.audio) {
         console.log('Audio data received, length:', data.audio.length);
         console.log('First 50 chars of audio:', data.audio.substring(0, 50));
+        
+        // Check if we need user interaction for audio
+        if (!hasUserInteracted) {
+            showInteractionPrompt();
+            // Store the audio for later playback
+            window.pendingAudio = {
+                audio: data.audio,
+                isGoodbye: isGoodbye
+            };
+            return;
+        }
         
         // Store goodbye flag for use after audio playback
         window.shouldDeactivateAfterAudio = isGoodbye;
@@ -212,65 +354,7 @@ socket.on('error', (data) => {
     setTimeout(() => updateStatus('Say "Hello Friday" to activate'), 3000);
 });
 
-// Show start prompt
-function showStartPrompt() {
-    // Add click listener to entire document
-    document.addEventListener('click', initializeAssistant, { once: true });
-    
-    // Add visual prompt
-    const promptDiv = document.createElement('div');
-    promptDiv.id = 'startPrompt';
-    promptDiv.className = 'start-prompt';
-    promptDiv.innerHTML = `
-        <div class="prompt-content">
-            <h2>Welcome to F.R.I.D.A.Y</h2>
-            <p>Click anywhere to start the voice assistant</p>
-            <button class="start-button">Start FRIDAY</button>
-        </div>
-    `;
-    document.body.appendChild(promptDiv);
-}
 
-// Initialize assistant after user interaction
-function initializeAssistant() {
-    hasUserInteracted = true;
-    
-    // Initialize audio context
-    audioContext = new (window.AudioContext || window.webkitAudioContext)();
-    
-    // Remove prompt if exists
-    const prompt = document.getElementById('startPrompt');
-    if (prompt) {
-        prompt.remove();
-    }
-    
-    // Start listening
-    updateStatus('Say "Hello Friday" to activate', 'active');
-    startListening();
-    
-    // Play welcome sound
-    playWelcomeSound();
-}
-
-// Play welcome sound
-function playWelcomeSound() {
-    if (!audioContext) return;
-    
-    const oscillator = audioContext.createOscillator();
-    const gainNode = audioContext.createGain();
-    
-    oscillator.connect(gainNode);
-    gainNode.connect(audioContext.destination);
-    
-    oscillator.frequency.setValueAtTime(600, audioContext.currentTime);
-    oscillator.frequency.exponentialRampToValueAtTime(800, audioContext.currentTime + 0.1);
-    
-    gainNode.gain.setValueAtTime(0.1, audioContext.currentTime);
-    gainNode.gain.exponentialRampToValueAtTime(0.01, audioContext.currentTime + 0.2);
-    
-    oscillator.start(audioContext.currentTime);
-    oscillator.stop(audioContext.currentTime + 0.2);
-}
 
 // Activate Friday when wake word is detected
 function activateFriday() {
@@ -279,8 +363,7 @@ function activateFriday() {
     updateStatus('Listening... Speak now', 'active');
     
     // Visual feedback
-    wakeIndicator.classList.add('active');
-    document.querySelector('.visualizer').classList.add('active');
+    document.querySelector('.voice-visualizer').classList.add('active');
     animateVisualizer();
     
     // Play activation sound
@@ -316,8 +399,7 @@ function resetSilenceTimer() {
 // Deactivate Friday
 function deactivateFriday() {
     isWakeWordActive = false;
-    wakeIndicator.classList.remove('active');
-    document.querySelector('.visualizer').classList.remove('active');
+    document.querySelector('.voice-visualizer').classList.remove('active');
 }
 
 // Process the speech
@@ -341,7 +423,7 @@ function processSpeech(text) {
 
 // Start continuous listening
 function startListening() {
-    if (!speechRecognitionAvailable || isListening || !hasUserInteracted) return;
+    if (!speechRecognitionAvailable || isListening) return;
     
     try {
         isListening = true;
@@ -372,15 +454,42 @@ function playActivationSound() {
 
 async function playAudioResponse(base64Audio) {
     try {
-        // Ensure audio context is initialized and resumed
+        // Ensure audio context is initialized
         if (!audioContext) {
-            audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            try {
+                audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                console.log('Audio context created during playback');
+            } catch (e) {
+                console.error('Failed to create audio context:', e);
+                // Show prompt if audio context creation fails
+                if (!hasUserInteracted) {
+                    showInteractionPrompt();
+                    // Store the audio for later playback
+                    window.pendingAudio = {
+                        audio: base64Audio,
+                        isGoodbye: window.shouldDeactivateAfterAudio
+                    };
+                    return;
+                }
+            }
         }
         
-        // Resume audio context if suspended (browser autoplay policy)
-        if (audioContext.state === 'suspended') {
-            await audioContext.resume();
-            console.log('Audio context resumed');
+        // Try to resume audio context if suspended
+        if (audioContext && audioContext.state === 'suspended') {
+            try {
+                await audioContext.resume();
+                console.log('Audio context resumed');
+            } catch (e) {
+                console.error('Failed to resume audio context:', e);
+                if (!hasUserInteracted) {
+                    showInteractionPrompt();
+                    window.pendingAudio = {
+                        audio: base64Audio,
+                        isGoodbye: window.shouldDeactivateAfterAudio
+                    };
+                    return;
+                }
+            }
         }
         
         // Pause recognition during audio playback
@@ -490,8 +599,7 @@ function handleAudioEnd() {
     // Stay active and ready for next input
     isWakeWordActive = true;
     updateStatus('Listening...', 'active');
-    wakeIndicator.classList.add('active');
-    document.querySelector('.visualizer').classList.add('active');
+    document.querySelector('.voice-visualizer').classList.add('active');
     
     // Restart visualizer animation
     animateVisualizer();
@@ -531,8 +639,30 @@ function base64ToBlob(base64, mimeType) {
 }
 
 function addMessage(sender, text) {
+    // Remove welcome message if it exists
+    const welcomeMsg = document.querySelector('.welcome-message');
+    if (welcomeMsg) {
+        welcomeMsg.remove();
+    }
+    
     const messageDiv = document.createElement('div');
     messageDiv.classList.add('message', sender);
+    
+    // Add avatar for assistant messages
+    if (sender === 'assistant') {
+        const avatar = document.createElement('div');
+        avatar.className = 'assistant-avatar';
+        avatar.innerHTML = `
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                <circle cx="12" cy="12" r="10"></circle>
+                <path d="M12 6v6l4 2"></path>
+            </svg>
+        `;
+        messageDiv.appendChild(avatar);
+    }
+    
+    const bubbleDiv = document.createElement('div');
+    bubbleDiv.classList.add('message-bubble', sender);
     
     const contentDiv = document.createElement('div');
     contentDiv.classList.add('message-content');
@@ -547,12 +677,18 @@ function addMessage(sender, text) {
     displayText = displayText.replace(/&lt;em&gt;/g, '<em>').replace(/&lt;\/em&gt;/g, '</em>');
     
     contentDiv.innerHTML = displayText;
+    bubbleDiv.appendChild(contentDiv);
+    messageDiv.appendChild(bubbleDiv);
     
-    messageDiv.appendChild(contentDiv);
     conversation.appendChild(messageDiv);
     
-    // Scroll to bottom
-    conversation.scrollTop = conversation.scrollHeight;
+    // Smooth scroll to bottom
+    setTimeout(() => {
+        conversation.scrollTo({
+            top: conversation.scrollHeight,
+            behavior: 'smooth'
+        });
+    }, 100);
 }
 
 function updateStatus(message, className = '') {
@@ -566,25 +702,45 @@ function updateStatus(message, className = '') {
 // Simple visualizer animation
 let animationId;
 function animateVisualizer() {
-    const WIDTH = audioVisualizer.width;
-    const HEIGHT = audioVisualizer.height;
+    const canvas = audioVisualizer;
+    const canvasCtx = visualizerCanvas;
+    const WIDTH = canvas.width;
+    const HEIGHT = canvas.height;
     
-    visualizerCanvas.fillStyle = 'rgba(0, 0, 0, 0.2)';
-    visualizerCanvas.fillRect(0, 0, WIDTH, HEIGHT);
+    // Clear canvas with fade effect
+    canvasCtx.fillStyle = 'rgba(10, 10, 10, 0.2)';
+    canvasCtx.fillRect(0, 0, WIDTH, HEIGHT);
     
-    const barCount = 20;
+    const barCount = 50;
     const barWidth = WIDTH / barCount;
+    const centerY = HEIGHT / 2;
     
     for (let i = 0; i < barCount; i++) {
-        const barHeight = Math.random() * HEIGHT * 0.7 + HEIGHT * 0.1;
+        // Create symmetrical waveform
+        const amplitude = Math.random() * 40 + 10;
+        const barHeight = amplitude;
         
-        const r = 250 * (i / barCount);
-        const g = 50;
-        const b = 250;
+        // Calculate color based on position
+        const hue = (i / barCount) * 60 + 180; // Cyan to blue gradient
+        const lightness = 50 + (Math.random() * 20);
         
-        visualizerCanvas.fillStyle = `rgb(${r},${g},${b})`;
-        visualizerCanvas.fillRect(i * barWidth, HEIGHT - barHeight, barWidth - 2, barHeight);
+        canvasCtx.fillStyle = `hsl(${hue}, 100%, ${lightness}%)`;
+        
+        // Draw bars from center
+        const x = i * barWidth;
+        
+        // Upper bars
+        canvasCtx.fillRect(x, centerY - barHeight, barWidth - 1, barHeight);
+        
+        // Lower bars (mirror)
+        canvasCtx.fillRect(x, centerY, barWidth - 1, barHeight);
+        
+        // Add glow effect
+        canvasCtx.shadowBlur = 10;
+        canvasCtx.shadowColor = `hsl(${hue}, 100%, 70%)`;
     }
+    
+    canvasCtx.shadowBlur = 0;
     
     if (isWakeWordActive) {
         animationId = requestAnimationFrame(animateVisualizer);
@@ -603,9 +759,15 @@ resetButton.addEventListener('click', async () => {
         
         if (response.ok) {
             conversation.innerHTML = `
-                <div class="message assistant">
-                    <div class="message-content">
-                        Conversation reset. Say "Hello Friday" to start a new conversation.
+                <div class="welcome-message">
+                    <div class="assistant-avatar">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="1.5">
+                            <circle cx="12" cy="12" r="10"></circle>
+                            <path d="M12 6v6l4 2"></path>
+                        </svg>
+                    </div>
+                    <div class="message-bubble assistant">
+                        <p>Conversation reset. Say <span class="highlight">"Hello Friday"</span> to start a new conversation!</p>
                     </div>
                 </div>
             `;
