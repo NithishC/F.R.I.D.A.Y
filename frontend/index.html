@@ -18,22 +18,17 @@
             <div id="conversation" class="conversation">
                 <div class="message assistant">
                     <div class="message-content">
-                        Hello! I'm FRIDAY, your AI assistant. Press and hold the microphone button to talk to me.
+                        Hello! I'm FRIDAY. Say "Hello Friday" to activate me.
                     </div>
                 </div>
             </div>
         </div>
         
         <div class="controls">
-            <button id="micButton" class="mic-button">
-                <svg class="mic-icon" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"></path>
-                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"></path>
-                    <line x1="12" y1="19" x2="12" y2="23"></line>
-                    <line x1="8" y1="23" x2="16" y2="23"></line>
-                </svg>
-                <span class="mic-text">Hold to Talk</span>
-            </button>
+            <div class="wake-indicator" id="wakeIndicator">
+                <div class="pulse-ring"></div>
+                <div class="wake-text">Say "Hello Friday"</div>
+            </div>
             
             <div class="status" id="status">Ready</div>
             
@@ -41,12 +36,6 @@
                 <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                     <path d="M1 4v6h6"></path>
                     <path d="M3.51 15a9 9 0 1 0 2.13-9.36L1 10"></path>
-                </svg>
-            </button>
-            
-            <button id="testButton" class="test-button" title="Test Audio">
-                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                    <path d="M9 11H3v2h6v-2zm0-4H3v2h6V7zm0 8H3v2h6v-2zm12-4h-6v2h6v-2zm0-4h-6v2h6V7zm0 8h-6v2h6v-2z"></path>
                 </svg>
             </button>
         </div>

@@ -1,0 +1,275 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Test - F.R.I.D.A.Y</title>
+    <style>
+        body {
+            font-family: Arial, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: #1a1a1a;
+            color: #fff;
+        }
+        button {
+            background: #007bff;
+            color: white;
+            border: none;
+            padding: 10px 20px;
+            margin: 10px;
+            cursor: pointer;
+            border-radius: 5px;
+            font-size: 16px;
+        }
+        button:hover {
+            background: #0056b3;
+        }
+        #status {
+            margin: 20px 0;
+            padding: 10px;
+            background: #333;
+            border-radius: 5px;
+            font-family: monospace;
+        }
+        .test-section {
+            margin: 20px 0;
+            padding: 20px;
+            background: #2a2a2a;
+            border-radius: 10px;
+        }
+        h2 {
+            color: #007bff;
+        }
+        #audioControls {
+            margin: 20px 0;
+        }
+    </style>
+</head>
+<body>
+    <h1>F.R.I.D.A.Y Audio Test Page</h1>
+    
+    <div class="test-section">
+        <h2>Test 1: Simple Audio Playback</h2>
+        <button onclick="testSimpleAudio()">Play Test Tone</button>
+        <button onclick="testWebAudioAPI()">Test Web Audio API</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 2: TTS from Backend</h2>
+        <button onclick="testBackendTTS()">Test Backend TTS</button>
+        <button onclick="testSocketTTS()">Test Socket.IO TTS</button>
+    </div>
+    
+    <div class="test-section">
+        <h2>Test 3: Manual Text Input</h2>
+        <input type="text" id="testText" value="Hello, this is a test of the FRIDAY voice system." style="width: 100%; padding: 10px; margin: 10px 0;">
+        <button onclick="testCustomTTS()">Speak Custom Text</button>
+    </div>
+    
+    <div id="audioControls"></div>
+    <div id="status">Status: Ready</div>
+    
+    <script src="https://cdn.socket.io/4.5.4/socket.io.min.js"></script>
+    <script>
+        const socket = io('http://localhost:5000');
+        const status = document.getElementById('status');
+        
+        function updateStatus(message) {
+            const timestamp = new Date().toLocaleTimeString();
+            status.innerHTML = `[${timestamp}] ${message}<br>` + status.innerHTML;
+        }
+        
+        // Test 1: Simple audio playback
+        function testSimpleAudio() {
+            updateStatus('Testing simple audio playback...');
+            
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const oscillator = audioContext.createOscillator();
+            const gainNode = audioContext.createGain();
+            
+            oscillator.connect(gainNode);
+            gainNode.connect(audioContext.destination);
+            
+            oscillator.frequency.value = 440; // A4 note
+            gainNode.gain.value = 0.1;
+            
+            oscillator.start();
+            oscillator.stop(audioContext.currentTime + 1);
+            
+            updateStatus('✓ Simple audio test complete (1 second tone)');
+        }
+        
+        // Test Web Audio API
+        async function testWebAudioAPI() {
+            updateStatus('Testing Web Audio API...');
+            
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                
+                if (audioContext.state === 'suspended') {
+                    await audioContext.resume();
+                    updateStatus('Audio context resumed');
+                }
+                
+                // Create a simple sine wave
+                const sampleRate = audioContext.sampleRate;
+                const duration = 1; // 1 second
+                const frequency = 440; // A4
+                
+                const buffer = audioContext.createBuffer(1, sampleRate * duration, sampleRate);
+                const channelData = buffer.getChannelData(0);
+                
+                for (let i = 0; i < channelData.length; i++) {
+                    channelData[i] = Math.sin(2 * Math.PI * frequency * i / sampleRate) * 0.1;
+                }
+                
+                const source = audioContext.createBufferSource();
+                source.buffer = buffer;
+                source.connect(audioContext.destination);
+                source.start();
+                
+                updateStatus('✓ Web Audio API test complete');
+            } catch (error) {
+                updateStatus('✗ Web Audio API test failed: ' + error.message);
+            }
+        }
+        
+        // Test backend TTS
+        async function testBackendTTS() {
+            updateStatus('Testing backend TTS...');
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/text-to-speech', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        text: 'This is a test of the backend text to speech system.'
+                    })
+                });
+                
+                if (!response.ok) {
+                    throw new Error(`HTTP error! status: ${response.status}`);
+                }
+                
+                const blob = await response.blob();
+                updateStatus(`Received audio blob: ${blob.size} bytes, type: ${blob.type}`);
+                
+                const audioUrl = URL.createObjectURL(blob);
+                const audio = new Audio(audioUrl);
+                audio.volume = 1.0;
+                
+                // Add audio element to page for debugging
+                audio.controls = true;
+                document.getElementById('audioControls').innerHTML = '';
+                document.getElementById('audioControls').appendChild(audio);
+                
+                await audio.play();
+                updateStatus('✓ Backend TTS playing');
+                
+                audio.onended = () => {
+                    URL.revokeObjectURL(audioUrl);
+                    updateStatus('✓ Backend TTS complete');
+                };
+                
+            } catch (error) {
+                updateStatus('✗ Backend TTS failed: ' + error.message);
+                console.error(error);
+            }
+        }
+        
+        // Test Socket.IO TTS
+        function testSocketTTS() {
+            updateStatus('Testing Socket.IO TTS...');
+            
+            socket.emit('text_message', {
+                text: 'This is a test of the socket connection for text to speech.'
+            });
+        }
+        
+        // Test custom TTS
+        async function testCustomTTS() {
+            const text = document.getElementById('testText').value;
+            updateStatus(`Testing custom TTS: "${text}"`);
+            
+            try {
+                const response = await fetch('http://localhost:5000/api/text-to-speech', {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ text })
+                });
+                
+                const blob = await response.blob();
+                const audioUrl = URL.createObjectURL(blob);
+                const audio = new Audio(audioUrl);
+                
+                audio.controls = true;
+                document.getElementById('audioControls').innerHTML = '';
+                document.getElementById('audioControls').appendChild(audio);
+                
+                await audio.play();
+                updateStatus('✓ Custom TTS playing');
+                
+            } catch (error) {
+                updateStatus('✗ Custom TTS failed: ' + error.message);
+            }
+        }
+        
+        // Socket.IO listeners
+        socket.on('connect', () => {
+            updateStatus('✓ Connected to Socket.IO server');
+        });
+        
+        socket.on('response', async (data) => {
+            updateStatus(`Socket response received - Text: "${data.text.substring(0, 50)}..."`);
+            
+            if (data.audio) {
+                updateStatus(`Audio data received: ${data.audio.length} characters`);
+                
+                try {
+                    // Convert base64 to blob
+                    const byteCharacters = atob(data.audio);
+                    const byteNumbers = new Array(byteCharacters.length);
+                    
+                    for (let i = 0; i < byteCharacters.length; i++) {
+                        byteNumbers[i] = byteCharacters.charCodeAt(i);
+                    }
+                    
+                    const byteArray = new Uint8Array(byteNumbers);
+                    const blob = new Blob([byteArray], { type: 'audio/mp3' });
+                    
+                    updateStatus(`Created blob: ${blob.size} bytes`);
+                    
+                    const audioUrl = URL.createObjectURL(blob);
+                    const audio = new Audio(audioUrl);
+                    audio.controls = true;
+                    
+                    document.getElementById('audioControls').innerHTML = '<h3>Socket.IO Audio:</h3>';
+                    document.getElementById('audioControls').appendChild(audio);
+                    
+                    await audio.play();
+                    updateStatus('✓ Socket.IO audio playing');
+                    
+                } catch (error) {
+                    updateStatus('✗ Socket.IO audio failed: ' + error.message);
+                    console.error(error);
+                }
+            } else {
+                updateStatus('✗ No audio in socket response');
+            }
+        });
+        
+        socket.on('error', (data) => {
+            updateStatus('✗ Socket error: ' + data.message);
+        });
+        
+        // Initialize
+        updateStatus('Audio test page loaded');
+    </script>
+</body>
+</html>

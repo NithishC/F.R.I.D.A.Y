@@ -71,12 +71,7 @@ except Exception as e:
     gemini_model = None
 
 # Voice configuration for Edge-TTS
-# Using Aria - a friendly female voice with emotion support
 VOICE = "en-US-AriaNeural"
-# Alternative voices with different personalities:
-# "en-US-JennyNeural" - More casual and warm
-# "en-US-SaraNeural" - Professional
-# "en-GB-SoniaNeural" - British accent
 
 class ConversationManager:
     def __init__(self):
@@ -88,9 +83,7 @@ class ConversationManager:
     
     def start_chat(self):
         try:
-            # Initialize a new chat session
             self.chat = gemini_model.start_chat(history=[])
-            # Send the system prompt as the first message
             self.chat.send_message(self.system_prompt)
             logger.info("New chat session started")
         except Exception as e:
@@ -98,7 +91,6 @@ class ConversationManager:
         
     def add_message(self, role, content):
         self.messages.append({"role": role, "content": content})
-        # Keep only last 10 messages to maintain context
         if len(self.messages) > 10:
             self.messages = self.messages[-10:]
     
@@ -110,9 +102,12 @@ class ConversationManager:
             self.add_message("user", user_input)
             logger.info(f"User: {user_input}")
             
-            # Send message to Gemini
-            response = self.chat.send_message(user_input)
-            assistant_response = response.text
+            # Check for goodbye messages
+            if user_input.lower() in ['goodbye', 'bye', 'stop listening', 'go to sleep', 'deactivate']:
+                assistant_response = "Goodbye! I'm going to sleep now. Just say 'Hello Friday' when you need me again."
+            else:
+                response = self.chat.send_message(user_input)
+                assistant_response = response.text
             
             self.add_message("assistant", assistant_response)
             logger.info(f"Assistant: {assistant_response}")
@@ -120,7 +115,6 @@ class ConversationManager:
             
         except Exception as e:
             logger.error(f"Error getting Gemini response: {e}")
-            # If error, try to reinitialize chat
             self.start_chat()
             try:
                 response = self.chat.send_message(user_input)
@@ -135,7 +129,6 @@ def detect_emotion(text):
     """Detect emotion from text to apply appropriate voice style"""
     text_lower = text.lower()
     
-    # Check for different emotional indicators
     if any(word in text_lower for word in ['excited', 'amazing', 'wonderful', 'fantastic', 'great news', '!']):
         return 'cheerful'
     elif any(word in text_lower for word in ['sorry', 'unfortunately', 'sad', 'difficult']):
@@ -145,23 +138,21 @@ def detect_emotion(text):
     elif any(word in text_lower for word in ['urgent', 'important', 'warning', 'alert']):
         return 'serious'
     else:
-        return 'chat'  # Default conversational style
-
+        return 'chat'
 
 async def generate_speech(text, emotion='chat'):
     """Generate speech with emotion using Edge-TTS"""
-    # Map emotions to voice variations
     voice_map = {
-        'cheerful': "en-US-AriaNeural",  # Default Aria is already cheerful
-        'empathetic': "en-US-JennyNeural",  # Jenny has a warmer, more empathetic tone
+        'cheerful': "en-US-AriaNeural",
+        'empathetic': "en-US-JennyNeural",
         'friendly': "en-US-AriaNeural",
-        'serious': "en-US-SaraNeural",  # Sara is more professional/serious
+        'serious': "en-US-SaraNeural",
         'chat': "en-US-AriaNeural"
     }
     
     selected_voice = voice_map.get(emotion, VOICE)
     
-    # Create communicate instance with plain text (not SSML)
+    # Create communicate instance with plain text
     communicate = edge_tts.Communicate(text, selected_voice)
     
     # Generate audio to bytes
@@ -170,7 +161,34 @@ async def generate_speech(text, emotion='chat'):
         if chunk["type"] == "audio":
             audio_data += chunk["data"]
     
+    logger.info(f"Generated audio data size: {len(audio_data)} bytes")
     return audio_data
+
+def clean_text_for_speech(text):
+    """Clean text for speech synthesis"""
+    # Remove bold markdown
+    text = text.replace('**', '')
+    # Remove italic markdown
+    text = text.replace('*', '')
+    # Remove other common markdown
+    text = text.replace('##', '').replace('###', '')
+    
+    # Remove emojis
+    emoji_pattern = re.compile("["
+                               u"\U0001F600-\U0001F64F"
+                               u"\U0001F300-\U0001F5FF"
+                               u"\U0001F680-\U0001F6FF"
+                               u"\U0001F1E0-\U0001F1FF"
+                               u"\U00002702-\U000027B0"
+                               u"\U000024C2-\U0001F251"
+                               u"\U0001F900-\U0001F9FF"
+                               u"\U00002600-\U000026FF"
+                               u"\U00002700-\U000027BF"
+                               "]+", flags=re.UNICODE)
+    text = emoji_pattern.sub('', text)
+    
+    # Clean up any double spaces
+    return ' '.join(text.split())
 
 @app.route('/')
 def index():
@@ -181,7 +199,7 @@ def health_check():
     health_status = {
         "status": "healthy",
         "gemini": "configured" if os.getenv('GEMINI_API_KEY') else "not configured",
-        "mode": "client-side speech recognition",
+        "mode": "hands-free voice recognition",
         "voice": "emotional TTS enabled"
     }
     logger.info(f"Health check: {health_status}")
@@ -211,33 +229,8 @@ def handle_text_message(data):
         # Get Gemini response
         response_text = conversation_manager.get_response(text)
         
-        # Clean up text for speech (remove markdown formatting and emojis)
-        speech_text = response_text
-        # Remove bold markdown
-        speech_text = speech_text.replace('**', '')
-        # Remove italic markdown
-        speech_text = speech_text.replace('*', '')
-        # Remove other common markdown
-        speech_text = speech_text.replace('##', '')
-        speech_text = speech_text.replace('###', '')
-        
-        # Remove emojis and other unicode characters that shouldn't be spoken
-        # Remove emoji patterns
-        emoji_pattern = re.compile("["
-                                   u"\U0001F600-\U0001F64F"  # emoticons
-                                   u"\U0001F300-\U0001F5FF"  # symbols & pictographs
-                                   u"\U0001F680-\U0001F6FF"  # transport & map symbols
-                                   u"\U0001F1E0-\U0001F1FF"  # flags (iOS)
-                                   u"\U00002702-\U000027B0"
-                                   u"\U000024C2-\U0001F251"
-                                   u"\U0001F900-\U0001F9FF"  # Supplemental Symbols and Pictographs
-                                   u"\U00002600-\U000026FF"  # Miscellaneous Symbols
-                                   u"\U00002700-\U000027BF"  # Dingbats
-                                   "]+", flags=re.UNICODE)
-        speech_text = emoji_pattern.sub('', speech_text)
-        
-        # Clean up any double spaces
-        speech_text = ' '.join(speech_text.split())
+        # Clean up text for speech
+        speech_text = clean_text_for_speech(response_text)
         
         # Detect emotion from the response
         emotion = detect_emotion(response_text)
@@ -246,18 +239,33 @@ def handle_text_message(data):
         # Convert response to speech with emotion
         try:
             # Run async function in sync context
-            audio_data = asyncio.run(generate_speech(speech_text, emotion))
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            audio_data = loop.run_until_complete(generate_speech(speech_text, emotion))
+            loop.close()
+            
             audio_base64 = base64.b64encode(audio_data).decode('utf-8')
             logger.info(f"Text-to-speech conversion successful with {emotion} style")
+            logger.info(f"Base64 audio length: {len(audio_base64)} characters")
+            
+            # Verify base64 encoding
+            try:
+                test_decode = base64.b64decode(audio_base64)
+                if len(test_decode) == len(audio_data):
+                    logger.info("Base64 encoding verified successfully")
+                else:
+                    logger.error(f"Base64 encoding mismatch: original {len(audio_data)} vs decoded {len(test_decode)}")
+            except Exception as e:
+                logger.error(f"Base64 verification failed: {e}")
         except Exception as e:
             logger.error(f"Text-to-speech failed: {e}")
             audio_base64 = None
         
-        # Send response back to client with original formatted text for display
+        # Send response back to client
         emit('response', {
-            'text': response_text,  # Original with markdown and emojis for display
+            'text': response_text,
             'audio': audio_base64,
-            'emotion': emotion  # Send emotion info to frontend
+            'emotion': emotion
         })
         
         logger.info("Response sent successfully")
@@ -278,7 +286,6 @@ def chat():
         
         logger.info(f"Chat API request: {text}")
         
-        # Get Gemini response
         response_text = conversation_manager.get_response(text)
         
         return jsonify({
@@ -298,13 +305,47 @@ def reset_conversation():
     logger.info("Conversation reset by user")
     return jsonify({'status': 'Conversation reset'})
 
+@app.route('/api/text-to-speech', methods=['POST'])
+def text_to_speech():
+    """Convert text to speech using Edge-TTS"""
+    try:
+        data = request.json
+        text = data.get('text', '')
+        
+        if not text:
+            return jsonify({'error': 'No text provided'}), 400
+        
+        logger.info(f"Text-to-speech request: {text[:50]}...")
+        
+        # Clean text for speech
+        speech_text = clean_text_for_speech(text)
+        
+        # Generate speech using Edge-TTS
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        audio_data = loop.run_until_complete(generate_speech(speech_text, 'friendly'))
+        loop.close()
+        
+        # Return as audio file
+        audio_buffer = io.BytesIO(audio_data)
+        audio_buffer.seek(0)
+        
+        return send_file(
+            audio_buffer,
+            mimetype='audio/mp3',
+            as_attachment=True,
+            download_name='response.mp3'
+        )
+    except Exception as e:
+        logger.error(f"Text-to-speech error: {e}")
+        return jsonify({'error': str(e)}), 500
+
 if __name__ == '__main__':
     logger.info("Starting Flask application...")
     logger.info(f"Log file: {log_filename}")
-    logger.info("Mode: Client-side speech recognition with emotional TTS")
+    logger.info("Mode: Hands-free voice recognition with emotional TTS")
     logger.info(f"Voice: {VOICE}")
     
-    # Check critical components
     if not os.getenv('GEMINI_API_KEY'):
         logger.warning("WARNING: No Gemini API key found! Please add it to .env file")
     
